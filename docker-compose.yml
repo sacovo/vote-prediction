@@ -1,0 +1,21 @@
+version: '3.7'
+
+services:
+  web:
+    image: nginx
+    volumes:
+      - ./www/:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf
+    ports:
+     - "8080:80"
+    environment:
+      - NGINX_ENTRYPOINT_QUIET_LOGS=1
+
+  predictor:
+    build: .
+    volumes:
+      - ./www/:/usr/src/app/www
+    environment:
+      - VOTATION_URL=https://app-prod-static-voteinfo.s3.eu-central-1.amazonaws.com/v1/ogd/sd-t-17-02-20201129-eidgAbstimmung.json
+      - VOTATION_INDEX=0
+
