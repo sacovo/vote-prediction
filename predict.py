@@ -1,7 +1,8 @@
+"""
+This module fetches voting data, tries to make a projection and writes it to the filesystem
+"""
 import json
-import math
 import os
-import sys
 import time
 from datetime import datetime
 
@@ -12,14 +13,22 @@ import requests
 OLD_RESULT_PATH = "abstimmungen.csv"
 
 HALBKANTONE = [
-    'Obwalden', 'Nidwalden', 'Basel-Stadt', 'Basel-Landschaft', 'Appenzell Ausserrhoden' 'Appenzell Innerrhoden'
+    "Obwalden",
+    "Nidwalden",
+    "Basel-Stadt",
+    "Basel-Landschaft",
+    "Appenzell Ausserrhoden",
+    "Appenzell Innerrhoden",
 ]
 
 
 def get_staende(kantone):
+    """
+    Return the amount stände that or over 50%
+    """
     total = 0
     for kanton, data in kantone.iterrows():
-        if data['JaInProzent'] > 50:
+        if data["JaInProzent"] > 50:
             if kanton in HALBKANTONE:
                 total += 0.5
             else:
@@ -27,28 +36,36 @@ def get_staende(kantone):
     return total
 
 
-def calculate_projection(Y):
+def calculate_projection(old_data):
     """
     Calculates the projection used to calculate the prediction
     """
-    u, s, v = np.linalg.svd(Y, full_matrices=False)
+    u, s, v = np.linalg.svd(old_data, full_matrices=False)
     s = np.diag(s)
     return np.dot(u, s)
 
 
-def prediction(X, y, I):
+def prediction(projection, values, indexes):
     """
     Predicts the result for the missing communities
     """
-    X_o = X[I]
-    tmp = np.linalg.inv((np.dot(X_o.T, X_o) + 0.01 * np.identity(X.shape[1])))
-    tmp2 = np.dot(tmp, X_o.T)
-    w = np.dot(tmp2, y[I])
+    observed_projection = projection[indexes]
+    tmp = np.linalg.inv(
+        (
+            np.dot(observed_projection.T, observed_projection)
+            + 0.01 * np.identity(projection.shape[1])
+        )
+    )
+    tmp2 = np.dot(tmp, observed_projection.T)
+    w = np.dot(tmp2, values[indexes])
 
-    return np.dot(X[~I], w)
+    return np.dot(projection[~indexes], w)
 
 
 def result_tuple(result):
+    """
+    Returns the tuple with the relevant info
+    """
     return (
         result["jaStimmenInProzent"] or 0.0,
         result["stimmbeteiligungInProzent"] or 0.0,
@@ -58,6 +75,9 @@ def result_tuple(result):
 
 
 def initial_dataframe(url, vote_index):
+    """
+    Fetches an initial dataset, and returns a dataframe
+    """
     kantone = requests.get(url).json()["schweiz"]["vorlagen"][vote_index]["kantone"]
     gemeinden = []
 
@@ -67,7 +87,7 @@ def initial_dataframe(url, vote_index):
             r = gemeinde["resultat"]
             gemeinden.append((kanton_name, gemeinde["geoLevelname"], *result_tuple(r)))
 
-    df = pd.DataFrame(
+    data_frame = pd.DataFrame(
         gemeinden,
         columns=[
             "Kanton",
@@ -79,26 +99,26 @@ def initial_dataframe(url, vote_index):
         ],
     ).set_index("Gemeinde")
 
-    return df
+    return data_frame
 
 
-def predict_results(df, proj_yes, proj_part):
-    df.loc[df["Ausgezaehlt"] == False, "JaInProzent"] = prediction(
-        proj_yes, df["JaInProzent"], df["Ausgezaehlt"]
+def predict_results(data_frame, proj_yes, proj_part):
+    data_frame.loc[df["Ausgezaehlt"] == False, "JaInProzent"] = prediction(
+        proj_yes, data_frame["JaInProzent"], data_frame["Ausgezaehlt"]
     )
-    df.loc[df["Ausgezaehlt"] == False, "StimmbetProzent"] = prediction(
-        proj_part, df["StimmbetProzent"], df["Ausgezaehlt"]
+    data_frame.loc[data_frame["Ausgezaehlt"] == False, "StimmbetProzent"] = prediction(
+        proj_part, data_frame["StimmbetProzent"], data_frame["Ausgezaehlt"]
     )
 
-    df["JaTotal"] = (
-        (df["JaInProzent"] / 100)
-        * (df["StimmbetProzent"] / 100)
-        * df["Stimmberechtigte"]
+    data_frame["JaTotal"] = (
+        (data_frame["JaInProzent"] / 100)
+        * (data_frame["StimmbetProzent"] / 100)
+        * data_frame["Stimmberechtigte"]
     )
-    df["NeinTotal"] = (
-        (1 - df["JaInProzent"] / 100)
-        * (df["StimmbetProzent"] / 100)
-        * df["Stimmberechtigte"]
+    data_frame["NeinTotal"] = (
+        (1 - data_frame["JaInProzent"] / 100)
+        * (data_frame["StimmbetProzent"] / 100)
+        * data_frame["Stimmberechtigte"]
     )
 
 
@@ -172,9 +192,9 @@ if __name__ == "__main__":
     url = os.environ["VOTATION_URL"]
     vote_index = int(os.environ["VOTATION_INDEX"])
 
-    os.makedirs(f'www/gemeinden/{vote_index}/', exist_ok=True)
-    os.makedirs(f'www/kantone/{vote_index}/', exist_ok=True)
-    os.makedirs(f'www/schweiz/{vote_index}/', exist_ok=True)
+    os.makedirs(f"www/gemeinden/{vote_index}/", exist_ok=True)
+    os.makedirs(f"www/kantone/{vote_index}/", exist_ok=True)
+    os.makedirs(f"www/schweiz/{vote_index}/", exist_ok=True)
 
     df = initial_dataframe(url, vote_index)
 
@@ -212,8 +232,12 @@ if __name__ == "__main__":
         predict_results(df, proj_yes, proj_part)
         kantone = calculate_kantone(df)
 
-        df.reset_index().to_json(f"www/gemeinden/{vote_index}/latest.json", orient="records")
-        kantone.reset_index().to_json(f"www/kantone/{vote_index}/latest.json", orient="records")
+        df.reset_index().to_json(
+            f"www/gemeinden/{vote_index}/latest.json", orient="records"
+        )
+        kantone.reset_index().to_json(
+            f"www/kantone/{vote_index}/latest.json", orient="records"
+        )
 
         timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -223,7 +247,9 @@ if __name__ == "__main__":
         ja_prozent = 0
 
         if (kantone["JaTotal"] + kantone["NeinTotal"]).sum() > 0:
-            ja_prozent = (ja_total / (kantone["JaTotal"] + kantone["NeinTotal"]).sum()) * 100
+            ja_prozent = (
+                ja_total / (kantone["JaTotal"] + kantone["NeinTotal"]).sum()
+            ) * 100
 
         schweiz = {
             "kantone": kantone_ja,
@@ -233,6 +259,8 @@ if __name__ == "__main__":
 
         json.dump([schweiz], open(f"www/schweiz/{vote_index}/latest.json", "w"))
 
-        df.reset_index().to_json(f"www/gemeinden/{vote_index}/{timestamp}.json", orient="records")
+        df.reset_index().to_json(
+            f"www/gemeinden/{vote_index}/{timestamp}.json", orient="records"
+        )
 
         time.sleep(20)
