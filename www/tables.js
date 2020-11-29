@@ -59,9 +59,9 @@ $(document).ready(function(){
     },
     'dom': 't',
     'columns': [
-      {'data': 'kantone', 'render': int_renderer, 'className': 'text-right'},
-      {'data': 'ja_prozent', 'render': float_renderer, 'className': 'text-right'},
       {'data': 'ja_total', 'render': int_renderer, 'className': 'text-right'},
+      {'data': 'ja_prozent', 'render': float_renderer, 'className': 'text-right'},
+      {'data': 'kantone', 'render': float_renderer, 'className': 'text-right'},
     ]
   });
 
