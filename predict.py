@@ -133,9 +133,9 @@ def calculate_kantone(df):
     return kanton_results
 
 
-def update_results(df, url):
+def update_results(df, url, index):
     new_results = requests.get(url).json()
-    kantone = new_results["schweiz"]["vorlagen"][0]["kantone"]
+    kantone = new_results["schweiz"]["vorlagen"][index]["kantone"]
 
     for kanton in kantone:
         for gemeinde in kanton["gemeinden"]:
@@ -228,7 +228,7 @@ if __name__ == "__main__":
     print("Starting fetch loop")
 
     while True:
-        update_results(df, url)
+        update_results(df, url, vote_index)
         predict_results(df, proj_yes, proj_part)
         kantone = calculate_kantone(df)
 
